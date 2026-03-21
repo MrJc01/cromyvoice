@@ -1,0 +1,8 @@
+{
+  "tts_engine": "edge-tts",
+  "piper_model": "pt_BR-faber-medium.onnx",
+  "edge_voice": "pt-BR-AntonioNeural",
+  "sink_name": "MyVoiceSink",
+  "mic_name": "Microfone_Bot",
+  "play_on_speaker": true
+}
