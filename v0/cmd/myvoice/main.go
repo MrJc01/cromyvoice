@@ -548,8 +548,13 @@ func hydrateMacros(cfg *config.AppConfig) {
 }
 
 func generateToFile(text, outPath string, cfg *config.AppConfig) error {
+	absOutPath, err := filepath.Abs(outPath)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
 	if cfg.TTSEngine == "edge-tts" {
-		cmd := exec.Command("edge-tts", "--voice", cfg.EdgeVoice, "--text", text, "--write-media", outPath)
+		cmd := exec.Command("edge-tts", "--voice", cfg.EdgeVoice, "--text", text, "--write-media", absOutPath)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("edge-tts error: %v, output: %s", err, string(out))
@@ -557,7 +562,7 @@ func generateToFile(text, outPath string, cfg *config.AppConfig) error {
 		return nil
 	} else if cfg.TTSEngine == "piper" {
 		libPath := filepath.Dir(cfg.PiperBinary)
-		cmd := exec.Command(cfg.PiperBinary, "--model", cfg.PiperModel, "--output_file", outPath)
+		cmd := exec.Command(cfg.PiperBinary, "--model", cfg.PiperModel, "--output_file", absOutPath)
 		cmd.Dir = libPath
 		cmd.Env = append(os.Environ(),
 			"ESPEAK_DATA_PATH="+filepath.Join(libPath, "espeak-ng-data"),
