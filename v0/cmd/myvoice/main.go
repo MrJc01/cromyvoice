@@ -2,9 +2,13 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -30,6 +34,33 @@ func main() {
 	}
 
 	cfg := config.LoadConfig(appDir)
+
+	textFlag := flag.String("text", "", "Text to synthesize")
+	outFlag := flag.String("out", "", "Output audio file path")
+	engineFlag := flag.String("engine", "", "TTS Engine (edge-tts or piper)")
+	voiceFlag := flag.String("voice", "", "Edge-tts voice name")
+	modelFlag := flag.String("model", "", "Piper model file path")
+	flag.Parse()
+
+	if *textFlag != "" && *outFlag != "" {
+		if *engineFlag != "" {
+			cfg.TTSEngine = *engineFlag
+		}
+		if *voiceFlag != "" {
+			cfg.EdgeVoice = *voiceFlag
+		}
+		if *modelFlag != "" {
+			cfg.PiperModel = *modelFlag
+		}
+
+		err := generateToFile(*textFlag, *outFlag, cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Erro ao gerar áudio: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("✅ Áudio gerado com sucesso em: %s\n", *outFlag)
+		os.Exit(0)
+	}
 
 	audio.DestroyVirtualMic(cfg.SinkName)
 	MicIsActive = false
@@ -514,4 +545,37 @@ func hydrateMacros(cfg *config.AppConfig) {
 		}
 	}
 	fmt.Println("✅ Cache de atalhos carregado e pronto para uso instantâneo!")
+}
+
+func generateToFile(text, outPath string, cfg *config.AppConfig) error {
+	if cfg.TTSEngine == "edge-tts" {
+		cmd := exec.Command("edge-tts", "--voice", cfg.EdgeVoice, "--text", text, "--write-media", outPath)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("edge-tts error: %v, output: %s", err, string(out))
+		}
+		return nil
+	} else if cfg.TTSEngine == "piper" {
+		libPath := filepath.Dir(cfg.PiperBinary)
+		cmd := exec.Command(cfg.PiperBinary, "--model", cfg.PiperModel, "--output_file", outPath)
+		cmd.Dir = libPath
+		cmd.Env = append(os.Environ(),
+			"ESPEAK_DATA_PATH="+filepath.Join(libPath, "espeak-ng-data"),
+			"LD_LIBRARY_PATH="+libPath,
+		)
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return err
+		}
+		go func() {
+			defer stdin.Close()
+			_, _ = io.WriteString(stdin, text+"\n")
+		}()
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("piper error: %v, output: %s", err, string(out))
+		}
+		return nil
+	}
+	return fmt.Errorf("unknown tts engine: %s", cfg.TTSEngine)
 }
