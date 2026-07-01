@@ -43,6 +43,30 @@ go build -o myvoice_app cmd/myvoice/main.go
 ./myvoice_app
 ```
 
+### 🤖 Modo Não-Interativo (Programático / Batch CLI)
+
+O MyVoice também pode ser chamado de forma programática por outras aplicações (como motores de vídeo) para gerar narrações TTS diretamente para arquivos sem abrir a interface de terminal (TUI):
+
+```bash
+./myvoice_app \
+  -text "Texto a ser sintetizado em voz neurais." \
+  -out tmp/saida_narracao.mp3 \
+  -engine edge-tts \
+  -voice pt-BR-FranciscaNeural \
+  -model pt_BR-fabio-medium.onnx
+```
+
+#### Parâmetros de CLI:
+
+*   `-text` — O texto completo a ser sintetizado.
+*   `-out` — O caminho de destino do arquivo de áudio (MP3 ou WAV).
+*   `-engine` — O motor de síntese (`edge-tts` para nuvem Microsoft ou `piper` para processamento nativo local).
+*   `-voice` — A voz neural desejada (ex: `pt-BR-FranciscaNeural`).
+*   `-model` — O arquivo do modelo Piper local (ex: `pt_BR-fabio-medium.onnx`).
+
+Quando chamado com as flags `-text` e `-out`, a aplicação sintetiza o áudio de forma rápida e encerra a execução com status 0, permitindo automações nativas em scripts bash/python.
+
+
 ## 📂 Arquitetura do Projeto
 
 O código está modularizado para assegurar manutenibilidade:
