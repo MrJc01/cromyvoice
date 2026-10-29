@@ -31,10 +31,16 @@ export const TTSForm: React.FC<TTSFormProps> = ({ engine, defaultVoice, defaultM
   };
 
   const getEngineBadge = () => {
-    if (engine === 'piper') {
-      return <span className="badge badge-blue">Piper (Local)</span>;
+    switch (engine) {
+      case 'kokoro':
+        return <span className="badge badge-emerald bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Kokoro-82M (Qualidade Estúdio)</span>;
+      case 'xtts':
+        return <span className="badge badge-amber bg-amber-500/20 text-amber-300 border border-amber-500/30">XTTS-v2 (Clonagem)</span>;
+      case 'piper':
+        return <span className="badge badge-blue">Piper (Local)</span>;
+      default:
+        return <span className="badge badge-purple">Edge-TTS (Nuvem)</span>;
     }
-    return <span className="badge badge-purple">Edge-TTS (Nuvem)</span>;
   };
 
   return (
@@ -69,7 +75,7 @@ export const TTSForm: React.FC<TTSFormProps> = ({ engine, defaultVoice, defaultM
         </div>
 
         {/* Sliders (Only for edge-tts) */}
-        {engine === 'edge-tts' ? (
+        {engine === 'edge-tts' && (
           <div className="p-4 bg-black/30 rounded-xl border border-white/5 space-y-4">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <Sliders className="w-3.5 h-3.5 text-cyan-400" />
@@ -120,10 +126,36 @@ export const TTSForm: React.FC<TTSFormProps> = ({ engine, defaultVoice, defaultM
               </div>
             </div>
           </div>
-        ) : (
+        )}
+
+        {engine === 'kokoro' && (
+          <div className="p-4 bg-emerald-950/20 rounded-xl border border-emerald-500/20 text-xs text-emerald-300/90 flex items-center gap-3">
+            <Volume2 className="w-6 h-6 text-emerald-400 shrink-0" />
+            <div>
+              <p className="font-semibold text-emerald-300">Motor Kokoro-82M v1.0 Ativo</p>
+              <p className="text-[11px] text-emerald-400/70">
+                Voz neural ativa: <b>{defaultVoice}</b>. Síntese local de altíssima fidelidade estilo ElevenLabs.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {engine === 'xtts' && (
+          <div className="p-4 bg-amber-950/20 rounded-xl border border-amber-500/20 text-xs text-amber-300/90 flex items-center gap-3">
+            <Volume2 className="w-6 h-6 text-amber-400 shrink-0" />
+            <div>
+              <p className="font-semibold text-amber-300">Clonagem de Voz XTTS-v2 Ativa</p>
+              <p className="text-[11px] text-amber-400/70">
+                O áudio será sintetizado em português clonando o timbre do áudio de referência configurado.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {engine === 'piper' && (
           <div className="p-4 bg-black/25 rounded-xl border border-white/5 text-center text-xs text-slate-400">
             <Volume2 className="w-5 h-5 mx-auto mb-2 text-cyan-500/50" />
-            O motor **Piper local** gera áudio nativo ultraveloz. Controles de velocidade e tom não são suportados nativamente neste motor.
+            O motor <b>Piper local</b> gera áudio nativo ultraveloz em CPU.
           </div>
         )}
 

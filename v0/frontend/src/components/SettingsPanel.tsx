@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Volume2, VolumeX, Radio, HardDrive, ListPlus } from 'lucide-react';
+import { Settings, Save, Volume2, VolumeX, Radio, HardDrive, ListPlus, Sparkles } from 'lucide-react';
 
 interface AppConfig {
   tts_engine: string;
   piper_model: string;
   piper_binary: string;
   edge_voice: string;
+  kokoro_voice?: string;
+  clone_voice_path?: string;
+  clone_language?: string;
   sink_name: string;
   mic_name: string;
   play_on_speaker: boolean;
@@ -16,6 +19,21 @@ interface SettingsPanelProps {
   config: AppConfig | null;
   onSaveConfig: (newConfig: AppConfig) => Promise<void>;
 }
+
+const KOKORO_VOICES = [
+  { value: 'pf_dora', label: '🇧🇷 Dora (Feminina - Português Brasileiro Nativo)' },
+  { value: 'pm_alex', label: '🇧🇷 Alex (Masculino - Português Brasileiro Nativo)' },
+  { value: 'pm_santa', label: '🇧🇷 Papai Noel (Masculino Grave - Português)' },
+  { value: 'af_heart', label: '🇺🇸 Heart (Feminina - Alta Definição / Suave)' },
+  { value: 'af_bella', label: '🇺🇸 Bella (Feminina - Expressiva)' },
+  { value: 'af_sarah', label: '🇺🇸 Sarah (Feminina - Clara / Profissional)' },
+  { value: 'am_adam', label: '🇺🇸 Adam (Masculino - Firme / Narrador)' },
+  { value: 'am_michael', label: '🇺🇸 Michael (Masculino - Conversacional)' },
+  { value: 'bf_isabella', label: '🇬🇧 Isabella (Feminina - Britânica Elegante)' },
+  { value: 'bm_george', label: '🇬🇧 George (Masculino - Britânica Clássica)' },
+  { value: 'ef_dora', label: '🇪🇸 Dora (Feminina - Espanhol)' },
+  { value: 'em_alex', label: '🇪🇸 Alex (Masculino - Espanhol)' },
+];
 
 const EDGE_VOICES = [
   { value: 'pt-BR-FranciscaNeural', label: 'Francisca (Feminina - Suave)' },
@@ -111,8 +129,61 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, onSaveConf
               >
                 <option value="edge-tts">Microsoft Edge TTS (Nuvem Neural - Grátis)</option>
                 <option value="piper">Piper TTS (Local ONNX - Ultra Rápido)</option>
+                <option value="kokoro">Kokoro-82M (Local ONNX - Qualidade Estúdio)</option>
+                <option value="xtts">XTTS-v2 (Local - Clonagem de Voz Zero-Shot)</option>
               </select>
             </div>
+
+            {/* Kokoro Voice */}
+            {localConfig.tts_engine === 'kokoro' && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold text-slate-300">Voz Neural Kokoro</label>
+                <select
+                  value={localConfig.kokoro_voice || 'pf_dora'}
+                  onChange={e => handleChange('kokoro_voice', e.target.value)}
+                  className="w-full"
+                >
+                  {KOKORO_VOICES.map(v => (
+                    <option key={v.value} value={v.value}>{v.label}</option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-slate-500">
+                  Modelo neural de 82M parâmetros executado localmente via ONNX Runtime.
+                </span>
+              </div>
+            )}
+
+            {/* XTTS Voice Clone */}
+            {localConfig.tts_engine === 'xtts' && (
+              <div className="flex flex-col gap-2 p-3 bg-black/40 rounded-xl border border-white/5">
+                <label className="text-sm font-semibold text-slate-300 flex items-center gap-1">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  Áudio de Referência para Clonagem (.wav)
+                </label>
+                <input
+                  type="text"
+                  value={localConfig.clone_voice_path || ''}
+                  onChange={e => handleChange('clone_voice_path', e.target.value)}
+                  placeholder="/home/.../.local/share/myvoice/clones/minha_voz.wav"
+                  className="w-full text-xs font-mono"
+                />
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-slate-400">Idioma:</label>
+                  <select
+                    value={localConfig.clone_language || 'pt'}
+                    onChange={e => handleChange('clone_language', e.target.value)}
+                    className="text-xs py-1 px-2"
+                  >
+                    <option value="pt">Português (Brasil)</option>
+                    <option value="en">Inglês</option>
+                    <option value="es">Espanhol</option>
+                  </select>
+                </div>
+                <span className="text-[10px] text-slate-500">
+                  Envie um arquivo WAV de 5 a 10 segundos falando com voz limpa para clonar seu timbre.
+                </span>
+              </div>
+            )}
 
             {/* Edge Voice */}
             {localConfig.tts_engine === 'edge-tts' && (

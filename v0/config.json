@@ -1,8 +1,17 @@
 {
-  "tts_engine": "edge-tts",
-  "piper_model": "pt_BR-faber-medium.onnx",
+  "tts_engine": "kokoro",
+  "piper_model": "/home/j/.local/share/myvoice/pt_BR-faber-medium.onnx",
+  "piper_binary": "/home/j/.local/share/myvoice/piper/piper",
   "edge_voice": "pt-BR-AntonioNeural",
+  "kokoro_voice": "pf_dora",
+  "clone_voice_path": "/home/j/.local/share/myvoice/clones/am_adam_sample.wav",
+  "clone_language": "pt",
   "sink_name": "MyVoiceSink",
   "mic_name": "Microfone_Bot",
-  "play_on_speaker": true
+  "play_on_speaker": true,
+  "macros": {
+    "1": "Sim, com certeza!",
+    "2": "Não, agora não.",
+    "3": "Como posso te ajudar?"
+  }
 }

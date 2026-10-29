@@ -17,19 +17,35 @@ type AppConfig struct {
 	Macros        map[string]string `json:"macros"`
 	DevMode       bool `json:"-"`
 
+	// Kokoro-82M (TTS Neural ONNX de alta fidelidade)
+	KokoroVoice   string `json:"kokoro_voice"`
+
+	// XTTS-v2 (Clonagem de Voz)
+	CloneVoicePath string `json:"clone_voice_path"`
+	CloneLanguage  string `json:"clone_language"`
+
+	// AI Engine (Micro-serviço Python local)
+	AIEngineURL   string `json:"ai_engine_url"`
+	AIEnginePython string `json:"ai_engine_python"`
+
 	savePath string `json:"-"`
 }
 
 func LoadConfig(appDir string) *AppConfig {
 	cfg := &AppConfig{
-		TTSEngine:     "piper", 
-		PiperModel:    filepath.Join(appDir, "pt_BR-faber-medium.onnx"),
-		PiperBinary:   filepath.Join(appDir, "piper", "piper"),
-		EdgeVoice:     "pt-BR-AntonioNeural",
-		SinkName:      "MyVoiceSink",
-		MicName:       "Microfone_Bot",
-		PlayOnSpeaker: false,
-		Macros:        make(map[string]string),
+		TTSEngine:      "piper", 
+		PiperModel:     filepath.Join(appDir, "pt_BR-faber-medium.onnx"),
+		PiperBinary:    filepath.Join(appDir, "piper", "piper"),
+		EdgeVoice:      "pt-BR-AntonioNeural",
+		SinkName:       "MyVoiceSink",
+		MicName:        "Microfone_Bot",
+		PlayOnSpeaker:  false,
+		Macros:         make(map[string]string),
+		KokoroVoice:    "pf_dora",
+		CloneVoicePath: "",
+		CloneLanguage:  "pt",
+		AIEngineURL:    "http://127.0.0.1:8001",
+		AIEnginePython: filepath.Join(appDir, "ai_env", "bin", "python3"),
 	}
 
 	cfg.savePath = filepath.Join(appDir, "config.json")

@@ -88,6 +88,9 @@ func main() {
 	http.HandleFunc("/api/audio/", serveAudio)
 	http.HandleFunc("/api/models", handleModels)
 	http.HandleFunc("/api/models/download", handleModelDownload)
+	http.HandleFunc("/api/voices/kokoro", handleKokoroVoices)
+	http.HandleFunc("/api/clone/voices", handleCloneVoices)
+	http.HandleFunc("/api/clone/upload", handleCloneUpload)
 
 	// Servir o frontend React compilado
 	fs := http.FileServer(http.Dir(staticDir))
@@ -146,6 +149,15 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 		if newCfg.EdgeVoice != "" {
 			cfg.EdgeVoice = newCfg.EdgeVoice
 		}
+		if newCfg.KokoroVoice != "" {
+			cfg.KokoroVoice = newCfg.KokoroVoice
+		}
+		if newCfg.CloneVoicePath != "" {
+			cfg.CloneVoicePath = newCfg.CloneVoicePath
+		}
+		if newCfg.CloneLanguage != "" {
+			cfg.CloneLanguage = newCfg.CloneLanguage
+		}
 		if newCfg.SinkName != "" {
 			cfg.SinkName = newCfg.SinkName
 		}
@@ -202,7 +214,14 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	voice := req.Voice
 	if voice == "" {
-		voice = cfg.EdgeVoice
+		if engine == "kokoro" {
+			voice = cfg.KokoroVoice
+			if voice == "" {
+				voice = "pf_dora"
+			}
+		} else {
+			voice = cfg.EdgeVoice
+		}
 	}
 	model := req.Model
 	if model == "" {
@@ -212,7 +231,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	// Criar nome único para o arquivo
 	timestamp := time.Now().UnixNano()
 	var ext string
-	if engine == "piper" {
+	if engine == "piper" || engine == "kokoro" || engine == "xtts" {
 		ext = ".wav"
 	} else {
 		ext = ".mp3"
@@ -386,6 +405,52 @@ func generateAudioFile(text, destPath, engine, voice, model, rate, pitch string)
 		return nil
 	}
 
+	if engine == "kokoro" || engine == "xtts" {
+		pythonBin := cfg.AIEnginePython
+		if pythonBin == "" {
+			home, _ := os.UserHomeDir()
+			pythonBin = filepath.Join(home, ".local", "share", "myvoice", "ai_env", "bin", "python3")
+		}
+
+		// Localizar o service.py
+		execPath, _ := os.Executable()
+		baseDir := filepath.Dir(execPath)
+		if strings.Contains(baseDir, "/tmp/go-build") {
+			baseDir, _ = os.Getwd()
+		}
+		serviceScript := filepath.Join(baseDir, "ai_engine", "service.py")
+
+		args := []string{serviceScript, "--engine", engine, "--text", text, "--out", absDestPath}
+
+		if engine == "kokoro" {
+			kokoroVoice := voice
+			if kokoroVoice == "" || strings.HasPrefix(kokoroVoice, "pt-BR-") || strings.HasPrefix(kokoroVoice, "en-US-") || kokoroVoice == cfg.EdgeVoice {
+				kokoroVoice = cfg.KokoroVoice
+				if kokoroVoice == "" {
+					kokoroVoice = "pf_dora"
+				}
+			}
+			args = append(args, "--voice", kokoroVoice)
+		} else if engine == "xtts" {
+			speakerWav := cfg.CloneVoicePath
+			if speakerWav == "" {
+				return fmt.Errorf("nenhuma voz de referência configurada para clonagem")
+			}
+			lang := cfg.CloneLanguage
+			if lang == "" {
+				lang = "pt"
+			}
+			args = append(args, "--speaker-wav", speakerWav, "--lang", lang)
+		}
+
+		cmd := exec.Command(pythonBin, args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("%s: %v (output: %s)", engine, err, string(out))
+		}
+		return nil
+	}
+
 	return fmt.Errorf("motor desconhecido: %s", engine)
 }
 
@@ -547,4 +612,129 @@ func downloadHTTPFile(url string, dest string) error {
 	_, err = io.Copy(out, resp.Body)
 	return err
 }
+
+func handleKokoroVoices(w http.ResponseWriter, r *http.Request) {
+	enableCors(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+
+	voices := []map[string]string{
+		{"id": "pf_dora", "name": "Dora (Feminina - Português Brasileiro Nativo)", "lang": "pt-br", "gender": "F"},
+		{"id": "pm_alex", "name": "Alex (Masculina - Português Brasileiro Nativo)", "lang": "pt-br", "gender": "M"},
+		{"id": "pm_santa", "name": "Papai Noel (Masculina Grave - Português)", "lang": "pt-br", "gender": "M"},
+		{"id": "af_heart", "name": "Heart (Feminina - Alta Definição / Suave)", "lang": "en-us", "gender": "F"},
+		{"id": "af_bella", "name": "Bella (Feminina - Expressiva)", "lang": "en-us", "gender": "F"},
+		{"id": "af_sarah", "name": "Sarah (Feminina - Clara / Profissional)", "lang": "en-us", "gender": "F"},
+		{"id": "am_adam", "name": "Adam (Masculina - Firme / Narrador)", "lang": "en-us", "gender": "M"},
+		{"id": "am_michael", "name": "Michael (Masculina - Conversacional)", "lang": "en-us", "gender": "M"},
+		{"id": "bf_isabella", "name": "Isabella (Feminina - Britânica)", "lang": "en-gb", "gender": "F"},
+		{"id": "bm_george", "name": "George (Masculina - Britânica)", "lang": "en-gb", "gender": "M"},
+		{"id": "ef_dora", "name": "Dora (Feminina - Espanhol)", "lang": "es", "gender": "F"},
+		{"id": "em_alex", "name": "Alex (Masculino - Espanhol)", "lang": "es", "gender": "M"},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(voices)
+}
+
+func handleCloneVoices(w http.ResponseWriter, r *http.Request) {
+	enableCors(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+
+	home, _ := os.UserHomeDir()
+	clonesDir := filepath.Join(home, ".local", "share", "myvoice", "clones")
+	os.MkdirAll(clonesDir, 0755)
+
+	entries, err := os.ReadDir(clonesDir)
+	if err != nil {
+		http.Error(w, "Erro ao listar vozes clonadas: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var voices []map[string]interface{}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		if ext == ".wav" || ext == ".mp3" || ext == ".ogg" || ext == ".flac" {
+			info, _ := entry.Info()
+			cleanName := strings.TrimSuffix(entry.Name(), ext)
+			cleanName = strings.ReplaceAll(cleanName, "_", " ")
+			cleanName = strings.Title(cleanName)
+
+			voices = append(voices, map[string]interface{}{
+				"filename": entry.Name(),
+				"path":     filepath.Join(clonesDir, entry.Name()),
+				"name":     cleanName,
+				"size":     info.Size(),
+			})
+		}
+	}
+
+	if voices == nil {
+		voices = make([]map[string]interface{}, 0)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(voices)
+}
+
+func handleCloneUpload(w http.ResponseWriter, r *http.Request) {
+	enableCors(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método não suportado", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Limitar tamanho a 25MB
+	r.ParseMultipartForm(25 << 20)
+
+	file, header, err := r.FormFile("audio")
+	if err != nil {
+		http.Error(w, "Erro ao receber arquivo de áudio: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	home, _ := os.UserHomeDir()
+	clonesDir := filepath.Join(home, ".local", "share", "myvoice", "clones")
+	os.MkdirAll(clonesDir, 0755)
+
+	destPath := filepath.Join(clonesDir, header.Filename)
+	out, err := os.Create(destPath)
+	if err != nil {
+		http.Error(w, "Erro ao salvar arquivo no disco: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, file)
+	if err != nil {
+		http.Error(w, "Erro ao gravar áudio: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Atualizar configuração atual para usar este clone automaticamente
+	cfg.CloneVoicePath = destPath
+	_ = cfg.Save()
+
+	response := map[string]interface{}{
+		"success":  true,
+		"filename": header.Filename,
+		"path":     destPath,
+		"message":  "Áudio de referência de voz importado com sucesso!",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 

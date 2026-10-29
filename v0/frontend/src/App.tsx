@@ -11,6 +11,9 @@ interface AppConfig {
   piper_model: string;
   piper_binary: string;
   edge_voice: string;
+  kokoro_voice?: string;
+  clone_voice_path?: string;
+  clone_language?: string;
   sink_name: string;
   mic_name: string;
   play_on_speaker: boolean;
@@ -206,8 +209,12 @@ function App() {
           {/* Formulário de Texto (Esquerda) */}
           <section className="lg:col-span-8 h-full">
             <TTSForm
-              engine={config?.tts_engine || 'edge-tts'}
-              defaultVoice={config?.edge_voice || 'pt-BR-FranciscaNeural'}
+              engine={config?.tts_engine || 'kokoro'}
+              defaultVoice={
+                config?.tts_engine === 'kokoro'
+                  ? (config?.kokoro_voice || 'pf_dora')
+                  : (config?.edge_voice || 'pt-BR-AntonioNeural')
+              }
               defaultModel={config?.piper_model || 'pt_BR-faber-medium.onnx'}
               onGenerate={handleGenerate}
               loading={loading}

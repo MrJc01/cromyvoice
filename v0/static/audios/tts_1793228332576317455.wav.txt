@@ -1,0 +1,1 @@
+No fim, o único antídoto real para o risco de governança e o colapso da manutenção é a soberania técnica. Você precisa estar preparado para assumir o controle. Isso significa ter a capacidade interna de entender, auditar e, se necessário, manter o código que você usa. A dependência passiva é uma sentença de morte lenta. 

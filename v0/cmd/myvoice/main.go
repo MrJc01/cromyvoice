@@ -37,9 +37,11 @@ func main() {
 
 	textFlag := flag.String("text", "", "Text to synthesize")
 	outFlag := flag.String("out", "", "Output audio file path")
-	engineFlag := flag.String("engine", "", "TTS Engine (edge-tts or piper)")
+	engineFlag := flag.String("engine", "", "TTS Engine (edge-tts, piper, kokoro, or xtts)")
 	voiceFlag := flag.String("voice", "", "Edge-tts voice name")
 	modelFlag := flag.String("model", "", "Piper model file path")
+	kokoroVoiceFlag := flag.String("kokoro-voice", "", "Kokoro voice name (e.g. af_bella, am_adam)")
+	cloneWavFlag := flag.String("clone-wav", "", "Reference WAV audio for voice cloning")
 	flag.Parse()
 
 	if *textFlag != "" && *outFlag != "" {
@@ -51,6 +53,12 @@ func main() {
 		}
 		if *modelFlag != "" {
 			cfg.PiperModel = *modelFlag
+		}
+		if *kokoroVoiceFlag != "" {
+			cfg.KokoroVoice = *kokoroVoiceFlag
+		}
+		if *cloneWavFlag != "" {
+			cfg.CloneVoicePath = *cloneWavFlag
 		}
 
 		err := generateToFile(*textFlag, *outFlag, cfg)
@@ -472,12 +480,14 @@ func openMacrosMenu(cfg *config.AppConfig, scanner *bufio.Scanner) {
 func openSettings(cfg *config.AppConfig, scanner *bufio.Scanner) {
 	for {
 		fmt.Println("\n--- ⚙️  Setup de Voz Avançado ---")
-		fmt.Printf("1) Engine de TTS  : [%s]\n", cfg.TTSEngine)
+		fmt.Printf("1) Engine de TTS  : [%s] (edge-tts / piper / kokoro / xtts)\n", cfg.TTSEngine)
 		fmt.Printf("2) Voz do Edge    : [%s]\n", cfg.EdgeVoice)
 		fmt.Printf("3) Modelo Piper   : [%s]\n", cfg.PiperModel)
-		fmt.Printf("4) Nome do Mic    : [%s]\n", cfg.MicName)
-		fmt.Println("5) 💾 Salvar e Voltar ao Início")
-		fmt.Print("\nO que vai alterar? [1-5]: ")
+		fmt.Printf("4) Voz do Kokoro  : [%s]\n", cfg.KokoroVoice)
+		fmt.Printf("5) Ref. Clonagem  : [%s]\n", cfg.CloneVoicePath)
+		fmt.Printf("6) Nome do Mic    : [%s]\n", cfg.MicName)
+		fmt.Println("7) 💾 Salvar e Voltar ao Início")
+		fmt.Print("\nO que vai alterar? [1-7]: ")
 
 		if !scanner.Scan() {
 			return
@@ -486,9 +496,14 @@ func openSettings(cfg *config.AppConfig, scanner *bufio.Scanner) {
 
 		switch opt {
 		case "1":
-			if cfg.TTSEngine == "edge-tts" {
+			switch cfg.TTSEngine {
+			case "edge-tts":
 				cfg.TTSEngine = "piper"
-			} else {
+			case "piper":
+				cfg.TTSEngine = "kokoro"
+			case "kokoro":
+				cfg.TTSEngine = "xtts"
+			default:
 				cfg.TTSEngine = "edge-tts"
 			}
 			fmt.Printf("✅ Motor definido para: %s\n", cfg.TTSEngine)
@@ -509,6 +524,22 @@ func openSettings(cfg *config.AppConfig, scanner *bufio.Scanner) {
 				}
 			}
 		case "4":
+			fmt.Print("Voz Kokoro (ex: af_bella, am_adam, af_sarah, am_michael): ")
+			if scanner.Scan() {
+				val := strings.TrimSpace(scanner.Text())
+				if val != "" {
+					cfg.KokoroVoice = val
+				}
+			}
+		case "5":
+			fmt.Print("Caminho do áudio WAV para clonagem (ex: ~/.local/share/myvoice/clones/minha_voz.wav): ")
+			if scanner.Scan() {
+				val := strings.TrimSpace(scanner.Text())
+				if val != "" {
+					cfg.CloneVoicePath = val
+				}
+			}
+		case "6":
 			fmt.Print("Novo Nome de Tela (ex: Fake_Bot, Mic_IA, Bot_RH): ")
 			if scanner.Scan() {
 				val := strings.TrimSpace(scanner.Text())
@@ -516,7 +547,7 @@ func openSettings(cfg *config.AppConfig, scanner *bufio.Scanner) {
 					cfg.MicName = val
 				}
 			}
-		case "5":
+		case "7":
 			if err := cfg.Save(); err != nil {
 				fmt.Printf("❌ Erro em disco: %v\n", err)
 			}
@@ -581,6 +612,8 @@ func generateToFile(text, outPath string, cfg *config.AppConfig) error {
 			return fmt.Errorf("piper error: %v, output: %s", err, string(out))
 		}
 		return nil
+	} else if cfg.TTSEngine == "kokoro" || cfg.TTSEngine == "xtts" {
+		return tts.SynthesizeAI(text, cfg.TTSEngine, absOutPath, cfg)
 	}
 	return fmt.Errorf("unknown tts engine: %s", cfg.TTSEngine)
 }

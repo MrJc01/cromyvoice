@@ -222,6 +222,11 @@ func GenerateAndPlay(text string, audioDevice string, cfg *config.AppConfig) err
 		return playUsingEdge(text, audioDevice, cfg) 
 	}
 
+	// Motores de IA avançada (Kokoro-82M e Clonagem XTTS-v2)
+	if cfg.TTSEngine == "kokoro" || cfg.TTSEngine == "xtts" {
+		return playUsingAIEngine(text, audioDevice, cfg)
+	}
+
 	if GlobalPiperStdin == nil {
 		if err := StartContinuousPipeline(cfg); err != nil {
 			return fmt.Errorf("fluxo corrompido (Auto-Wake Local IA falhou): %v", err)
@@ -234,6 +239,93 @@ func GenerateAndPlay(text string, audioDevice string, cfg *config.AppConfig) err
 	}
 
 	return fmt.Errorf("fluxo corrompido: Piper ausente/nulo na Fila Principal.")
+}
+
+// playUsingAIEngine sintetiza via Kokoro-82M ou XTTS-v2 e injeta o WAV resultante no PulseAudio
+func playUsingAIEngine(text string, audioDevice string, cfg *config.AppConfig) error {
+	tmpFile := fmt.Sprintf("/tmp/cromyvoice_ai_%d.wav", time.Now().UnixNano())
+
+	if cfg.DevMode {
+		fmt.Printf("\r\n\033[36m[DEV AI-ENGINE]\033[0m Motor=%s, Sintetizando: '%s'\r\n", cfg.TTSEngine, text)
+	}
+
+	err := SynthesizeAI(text, cfg.TTSEngine, tmpFile, cfg)
+	if err != nil {
+		return fmt.Errorf("ai_engine (%s) falhou: %v", cfg.TTSEngine, err)
+	}
+	defer os.Remove(tmpFile)
+
+	// Ler o WAV gerado e injetar no PulseAudio
+	wavData, err := os.ReadFile(tmpFile)
+	if err != nil {
+		return fmt.Errorf("erro ao ler WAV do ai_engine: %v", err)
+	}
+
+	if len(wavData) < 100 {
+		return fmt.Errorf("ai_engine gerou WAV vazio ou corrompido (%d bytes)", len(wavData))
+	}
+
+	if cfg.DevMode {
+		fmt.Printf("\r\n\033[36m[DEV AI-ENGINE SUCESSO]\033[0m WAV em RAM (%d bytes)\r\n", len(wavData))
+	}
+
+	// Extrair PCM do WAV (pular header de 44 bytes)
+	pcmData := wavData
+	if len(wavData) > 44 {
+		pcmData = wavData[44:]
+	}
+
+	c, err := getPulseClient()
+	if err != nil {
+		return err
+	}
+
+	sinkName := strings.TrimPrefix(cfg.SinkName, "pulse/")
+	virtualSink, errSink := c.SinkByID(sinkName)
+
+	// Kokoro gera a 24000 Hz mono, XTTS a 24000 Hz mono também
+	sampleRate := 24000
+
+	var virStream, spkStream *pulse.PlaybackStream
+	virtBuf := &ContinuousBuffer{}
+	spkBuf := &ContinuousBuffer{}
+
+	if cfg.PlayOnSpeaker {
+		if errSink == nil {
+			virtBuf.Write(pcmData)
+		}
+		spkBuf.Write(pcmData)
+
+		if errSink == nil {
+			virStream, _ = c.NewPlayback(pulse.NewReader(virtBuf, proto.FormatInt16LE), pulse.PlaybackSampleRate(sampleRate), pulse.PlaybackMono, pulse.PlaybackSink(virtualSink))
+		}
+		spkStream, _ = c.NewPlayback(pulse.NewReader(spkBuf, proto.FormatInt16LE), pulse.PlaybackSampleRate(sampleRate), pulse.PlaybackMono)
+	} else {
+		if errSink == nil {
+			virtBuf.Write(pcmData)
+			virStream, _ = c.NewPlayback(pulse.NewReader(virtBuf, proto.FormatInt16LE), pulse.PlaybackSampleRate(sampleRate), pulse.PlaybackMono, pulse.PlaybackSink(virtualSink))
+		}
+	}
+
+	if virStream == nil && spkStream == nil {
+		return fmt.Errorf("nenhuma saída ativa para reproduzir áudio do ai_engine")
+	}
+
+	if virStream != nil { virStream.Start() }
+	if spkStream != nil { spkStream.Start() }
+
+	// Calcular duração de reprodução
+	bytesPerSample := 2
+	numChans := 1
+	bytesPerSec := sampleRate * numChans * bytesPerSample
+	playDuration := time.Duration(len(pcmData)) * time.Second / time.Duration(bytesPerSec)
+
+	time.Sleep(playDuration + 200*time.Millisecond)
+
+	if virStream != nil { virStream.Close() }
+	if spkStream != nil { spkStream.Close() }
+
+	return nil
 }
 
 func playUsingEdge(text string, audioDevice string, cfg *config.AppConfig) error {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, Check, Sparkles, AlertCircle, HardDrive, Globe, Info } from 'lucide-react';
+import { Download, Check, AlertCircle, HardDrive, Globe, Info } from 'lucide-react';
 
 interface AvailableModel {
   name: string;
